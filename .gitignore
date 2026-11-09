@@ -1,0 +1,18 @@
+# Ignorar configuración local del IDE
+.idea/
+*.iml
+.vscode/
+
+# Backend
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
