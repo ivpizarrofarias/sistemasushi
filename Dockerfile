@@ -1,4 +1,3 @@
-# syntax=dockerfile:1
 # Imagen única: construye el frontend (React) y el backend (Spring Boot) y
 # sirve ambos desde la misma aplicación (API + recursos estáticos).
 
