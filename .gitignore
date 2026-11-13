@@ -6,6 +6,9 @@
 # Backend
 backend/target/
 backend/.mvn/wrapper/maven-wrapper.jar
+# Perfiles con credenciales (no versionar)
+backend/src/main/resources/application-local.properties
+backend/src/main/resources/application-server.properties
 
 # Frontend
 frontend/node_modules/
@@ -16,3 +19,6 @@ frontend/.env.local
 .DS_Store
 Thumbs.db
 *.log
+
+# Entorno (docker compose)
+.env

@@ -1,0 +1,21 @@
+name: sistemasushi
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sistemasushi-app:latest
+    container_name: sistemasushi-app
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # Perfil activo: server (conecta a la base de datos del servidor)
+      SPRING_PROFILES_ACTIVE: server
+      # Base de datos del servidor (localhost desde el contenedor)
+      DB_URL: ${DB_URL:-jdbc:postgresql://<host>:<puerto>/<nombre_de_la_base>}
+      DB_USER: ${DB_USER:?define DB_USER en .env}
+      DB_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      SERVER_PORT: ${APP_PORT:-8000}

@@ -95,8 +95,14 @@ public class UserService {
     }
 
     private void validatePassword(String password) {
-        if (password.length() < 4) {
-            throw new IllegalArgumentException("La contraseña debe tener al menos 4 caracteres");
+        if (password == null || password.length() < 8) {
+            throw new IllegalArgumentException("La contraseña debe tener al menos 8 caracteres");
+        }
+        if (!password.matches(".*[A-Z].*")) {
+            throw new IllegalArgumentException("La contraseña debe contener al menos una letra mayúscula");
+        }
+        if (!password.matches(".*[0-9].*")) {
+            throw new IllegalArgumentException("La contraseña debe contener al menos un número");
         }
     }
 }

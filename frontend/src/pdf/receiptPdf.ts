@@ -20,7 +20,7 @@ function line(doc: jsPDF, y: number, width: number) {
   return y + 3
 }
 
-export function downloadReceiptPdf(sale: Sale) {
+export function generateReceiptPdf(sale: Sale): Blob {
   const doc = new jsPDF({ unit: 'mm', format: [PAGE_WIDTH_MM, PAGE_HEIGHT_MM] })
   const width = PAGE_WIDTH_MM
   let y = 8
@@ -78,7 +78,7 @@ export function downloadReceiptPdf(sale: Sale) {
   y += 2
   y = line(doc, y, width)
 
-  // Totales
+  // Totales con desglose de IVA (Ley chilena - SII)
   doc.setFontSize(8)
   const rightX = width - MARGIN_MM
   const labelX = 48
@@ -91,6 +91,16 @@ export function downloadReceiptPdf(sale: Sale) {
     doc.text(`-${money(sale.discount)}`, rightX, y, { align: 'right' })
     y += 4
   }
+
+  // Neto (sin IVA)
+  doc.text('Neto', labelX, y)
+  doc.text(money(sale.netAmount), rightX, y, { align: 'right' })
+  y += 4
+
+  // IVA 19%
+  doc.text('IVA (19%)', labelX, y)
+  doc.text(money(sale.ivaAmount), rightX, y, { align: 'right' })
+  y += 4
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
@@ -124,5 +134,24 @@ export function downloadReceiptPdf(sale: Sale) {
   y += 3.5
   doc.text('Sin valor tributario', width / 2, y, { align: 'center' })
 
-  doc.save(`boleta-${sale.number}.pdf`)
+  const pdfBlob = doc.output('blob')
+  return pdfBlob
+}
+
+export function previewReceiptPdf(sale: Sale) {
+  const blob = generateReceiptPdf(sale)
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank')
+}
+
+export function downloadReceiptPdf(sale: Sale) {
+  const blob = generateReceiptPdf(sale)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `boleta-${sale.number}.pdf`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }

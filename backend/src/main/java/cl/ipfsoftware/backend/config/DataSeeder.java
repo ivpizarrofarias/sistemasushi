@@ -28,6 +28,8 @@ public class DataSeeder {
     ) {
         return args -> {
             if (userRepository.count() == 0) {
+                // CUENTAS POR DEFECTO: estas credenciales solo sirven para el primer arranque.
+                // En producción deben cambiarse inmediatamente tras el primer inicio de sesión.
                 User admin = new User();
                 admin.setUsername("admin");
                 admin.setPassword(passwordEncoder.encode("<ADMIN_PASSWORD>"));

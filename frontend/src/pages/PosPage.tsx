@@ -4,9 +4,9 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 import Modal from '../components/Modal'
 import MoneyInput from '../components/MoneyInput'
-import { downloadReceiptPdf } from '../pdf/receiptPdf'
+import { previewReceiptPdf } from '../pdf/receiptPdf'
 import type { CashSession, Category, PaymentMethod, Product, Sale } from '../types'
-import { money, parseAmount, paymentLabel } from '../utils'
+import { calcIva, money, parseAmount, paymentLabel } from '../utils'
 import { alertError } from '../utils/alert'
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -151,7 +151,7 @@ export default function PosPage() {
       setLastSale(sale)
       setShowPreview(false)
       if (withBoleta) {
-        downloadReceiptPdf(sale)
+        previewReceiptPdf(sale)
       }
       clearCart()
       await load()
@@ -419,6 +419,21 @@ export default function PosPage() {
                 <span>Total</span>
                 <strong>{money(total)}</strong>
               </div>
+              {(() => {
+                const { netAmount, ivaAmount } = calcIva(total)
+                return (
+                  <>
+                    <div>
+                      <span>Neto</span>
+                      <strong>{money(netAmount)}</strong>
+                    </div>
+                    <div>
+                      <span>IVA (19%)</span>
+                      <strong>{money(ivaAmount)}</strong>
+                    </div>
+                  </>
+                )
+              })()}
               <div>
                 <span>Pago</span>
                 <strong>{paymentLabel(paymentMethod)}</strong>
@@ -438,7 +453,7 @@ export default function PosPage() {
             </div>
 
             <p className="muted" style={{ fontSize: 13 }}>
-              Al generar la boleta se registrará la venta y se descargará el PDF.
+              Al confirmar se registrará la venta y se abrirá la boleta en una nueva pestaña.
             </p>
             <button
               type="button"
@@ -510,6 +525,14 @@ export default function PosPage() {
                 <strong>{money(lastSale.total)}</strong>
               </div>
               <div>
+                <span>Neto</span>
+                <strong>{money(lastSale.netAmount)}</strong>
+              </div>
+              <div>
+                <span>IVA (19%)</span>
+                <strong>{money(lastSale.ivaAmount)}</strong>
+              </div>
+              <div>
                 <span>Pago</span>
                 <strong>{paymentLabel(lastSale.paymentMethod)}</strong>
               </div>
@@ -522,11 +545,11 @@ export default function PosPage() {
                 <strong>{money(lastSale.changeAmount)}</strong>
               </div>
             </div>
-            <button type="button" className="btn btn-primary btn-block" onClick={() => downloadReceiptPdf(lastSale)}>
-              🧾 Generar boleta
+            <button type="button" className="btn btn-primary btn-block" onClick={() => previewReceiptPdf(lastSale)}>
+              🧾 Ver boleta
             </button>
             <p className="muted" style={{ fontSize: 13, textAlign: 'center' }}>
-              Se descargará la boleta en PDF.
+              Se abrirá la boleta en una nueva pestaña.
             </p>
             <button type="button" className="btn btn-ghost btn-block" onClick={() => setLastSale(null)}>
               Nueva venta

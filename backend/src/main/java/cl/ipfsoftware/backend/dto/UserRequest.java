@@ -9,7 +9,7 @@ public record UserRequest(
         @NotBlank(message = "El usuario es obligatorio")
         @Size(max = 50, message = "El usuario no puede superar 50 caracteres")
         String username,
-        @Size(max = 100, message = "La contraseña no puede superar 100 caracteres")
+        @Size(min = 8, max = 100, message = "La contraseña debe tener entre 8 y 100 caracteres")
         String password,
         @NotBlank(message = "El nombre es obligatorio")
         @Size(max = 120, message = "El nombre no puede superar 120 caracteres")

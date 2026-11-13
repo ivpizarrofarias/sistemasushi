@@ -270,3 +270,46 @@ flowchart LR
 - Los montos se guardan y muestran en **CLP** (sin decimales en la UI).
 - Medios de pago: Efectivo (`CASH`), Débito (`DEBIT`), Crédito (`CREDIT`),
   Transferencia (`TRANSFER`).
+
+---
+
+## 9. Despliegue con Docker (servidor)
+
+El proyecto incluye `Dockerfile` y `docker-compose.yml` para desplegar en un
+servidor con un solo contenedor: la aplicación (Spring Boot sirviendo también
+el frontend compilado). Acceso por `http://<ip-del-servidor>:8000`.
+
+La aplicación usa por defecto la base de datos del servidor
+(`<IP_DEL_SERVIDOR>:5432`, base configurable). Si quieres usar otra, define
+`DB_URL`, `DB_USER` y `DB_PASSWORD` en un archivo `.env` (ver `.env.example`).
+
+### 9.1 Requisitos en el servidor
+
+- Docker Engine y Docker Compose v2 (`docker compose`).
+
+### 9.2 Pasos
+
+```bash
+git clone <url-del-repositorio>
+cd sistemasushi
+docker compose up -d --build
+docker compose logs -f app
+```
+
+La primera vez Hibernate crea el esquema (`ddl-auto=update`) y el `DataSeeder`
+crea los usuarios iniciales (`admin`/`<ADMIN_PASSWORD>`, `cajero`/`<CASHIER_PASSWORD>`) y los
+productos de ejemplo.
+
+### 9.3 Comandos útiles
+
+| Comando | Descripción |
+|---|---|
+| `docker compose ps` | Estado del contenedor. |
+| `docker compose logs -f app` | Logs de la aplicación. |
+| `docker compose down` | Detiene el contenedor. |
+| `docker compose up -d --build` | Reconstruye y reinicia tras cambiar el código. |
+
+> La base de datos está en el servidor (`<IP_DEL_SERVIDOR>`), no en un contenedor.
+> Para administrarla usa el `psql` del servidor o un cliente externo.
+
+> Cambia las contraseñas iniciales desde **Usuarios** antes de operar.

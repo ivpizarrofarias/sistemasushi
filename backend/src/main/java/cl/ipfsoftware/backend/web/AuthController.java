@@ -1,5 +1,6 @@
 package cl.ipfsoftware.backend.web;
 
+import cl.ipfsoftware.backend.config.LoginRateLimitingFilter;
 import cl.ipfsoftware.backend.domain.User;
 import cl.ipfsoftware.backend.dto.LoginRequest;
 import cl.ipfsoftware.backend.dto.UserDto;
@@ -14,6 +15,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,10 +30,21 @@ public class AuthController {
 
     private final UserService userService;
     private final SecurityContextRepository securityContextRepository;
+    private final LoginRateLimitingFilter loginRateLimitingFilter;
 
-    public AuthController(UserService userService, SecurityContextRepository securityContextRepository) {
+    public AuthController(
+            UserService userService,
+            SecurityContextRepository securityContextRepository,
+            LoginRateLimitingFilter loginRateLimitingFilter
+    ) {
         this.userService = userService;
         this.securityContextRepository = securityContextRepository;
+        this.loginRateLimitingFilter = loginRateLimitingFilter;
+    }
+
+    @GetMapping("/csrf-token")
+    public CsrfToken csrfToken(HttpServletRequest request) {
+        return (CsrfToken) request.getAttribute("_csrf");
     }
 
     @PostMapping("/login")
@@ -40,26 +53,32 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        User user = userService.authenticate(request.username(), request.password());
+        String ip = httpRequest.getRemoteAddr();
+        try {
+            User user = userService.authenticate(request.username(), request.password());
 
-        var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
-        var authentication = UsernamePasswordAuthenticationToken.authenticated(
-                user.getUsername(), null, authorities);
+            var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+            var authentication = UsernamePasswordAuthenticationToken.authenticated(
+                    user.getUsername(), null, authorities);
 
-        // Protección contra fijación de sesión: se descarta cualquier sesión previa
-        // antes de guardar la autenticación en una sesión nueva.
-        HttpSession previousSession = httpRequest.getSession(false);
-        if (previousSession != null) {
-            previousSession.invalidate();
+            // Protección contra fijación de sesión: se descarta cualquier sesión previa
+            // antes de guardar la autenticación en una sesión nueva.
+            HttpSession previousSession = httpRequest.getSession(false);
+            if (previousSession != null) {
+                previousSession.invalidate();
+            }
+
+            SecurityContext context = SecurityContextHolder.createEmptyContext();
+            context.setAuthentication(authentication);
+            SecurityContextHolder.setContext(context);
+            httpRequest.getSession(true);
+            securityContextRepository.saveContext(context, httpRequest, httpResponse);
+
+            return UserDto.from(user);
+        } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+            loginRateLimitingFilter.recordFailedAttempt(ip);
+            throw ex;
         }
-
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
-        httpRequest.getSession(true);
-        securityContextRepository.saveContext(context, httpRequest, httpResponse);
-
-        return UserDto.from(user);
     }
 
     @GetMapping("/me")

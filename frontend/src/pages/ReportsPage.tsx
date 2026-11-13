@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { api } from '../api'
 import type { Sale, SalesReport } from '../types'
-import { money, paymentLabel, todayISO } from '../utils'
+import { formatDisplayDate, money, paymentLabel, todayISO } from '../utils'
 import { alertError, alertSuccess, confirmAction } from '../utils/alert'
 
 export default function ReportsPage() {
@@ -43,7 +43,7 @@ export default function ReportsPage() {
     setExporting(true)
     try {
       await api.downloadReportExcel(from, to)
-      alertSuccess(from === to ? `Reporte generado y Excel de ventas del día ${from} descargado` : `Reporte generado y Excel del período ${from} al ${to} descargado`)
+      alertSuccess(from === to ? `Reporte generado y Excel de ventas del día ${formatDisplayDate(from)} descargado` : `Reporte generado y Excel del período ${formatDisplayDate(from)} al ${formatDisplayDate(to)} descargado`)
     } catch (err) {
       alertError(err instanceof Error ? err.message : 'No se pudo generar el Excel')
     } finally {
@@ -203,7 +203,7 @@ export default function ReportsPage() {
 
       <div className="card table-card">
         <div className="card-header">
-          <h2>Ventas del día {to}: productos y cantidades</h2>
+          <h2>Ventas del día {formatDisplayDate(to)}: productos y cantidades</h2>
           <span className="badge badge-neutral">
             {dailyCompleted.length} venta(s) · {dailyUnits} unidad(es) · {money(dailySalesTotal)}
           </span>
@@ -253,7 +253,7 @@ export default function ReportsPage() {
 
       <div className="card table-card">
         <div className="card-header">
-          <h2>Ventas del {to}</h2>
+          <h2>Ventas del {formatDisplayDate(to)}</h2>
           <span className="badge badge-neutral">{sales.length} registro(s)</span>
         </div>
         <table className="table">

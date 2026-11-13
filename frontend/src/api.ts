@@ -23,13 +23,24 @@ export class ApiError extends Error {
   }
 }
 
+function getCsrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const { headers, ...rest } = options
+  const method = (options.method ?? 'GET').toUpperCase()
+  const isMutating = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
+
+  const csrfToken = isMutating ? getCsrfToken() : null
+
   const response = await fetch(`/api${path}`, {
     credentials: 'include',
     ...rest,
     headers: {
       'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-XSRF-TOKEN': csrfToken } : {}),
       ...(headers ?? {}),
     },
   })

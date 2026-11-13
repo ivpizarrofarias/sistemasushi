@@ -38,6 +38,8 @@ export interface SaleItem {
   unitPrice: number
   quantity: number
   lineTotal: number
+  netAmount: number
+  ivaAmount: number
 }
 
 export interface Sale {
@@ -52,6 +54,8 @@ export interface Sale {
   total: number
   amountReceived: number
   changeAmount: number
+  netAmount: number
+  ivaAmount: number
   items: SaleItem[]
 }
 

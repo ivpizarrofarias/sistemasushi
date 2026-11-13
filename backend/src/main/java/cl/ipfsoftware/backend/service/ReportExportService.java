@@ -11,6 +11,7 @@ import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
@@ -37,13 +38,24 @@ import java.util.Map;
  * Genera el reporte de ventas como archivo Excel (.xlsx):
  * - Resumen: totales del período
  * - Productos: producto, cantidad vendida y total por producto
- * - Ventas: detalle de cada venta del período (ventas del día incluido)
+ * - Ventas: detalle de cada venta del período
  */
 @Service
 public class ReportExportService {
 
+    // Colores de marca (sushi)
+    private static final IndexedColors COLOR_PRIMARY = IndexedColors.DARK_RED;      // #e11d48 aproximado
+    private static final IndexedColors COLOR_HEADER_BG = IndexedColors.GREY_25_PERCENT;
+    private static final IndexedColors COLOR_ZEBRA = IndexedColors.GREY_25_PERCENT;
+    private static final IndexedColors COLOR_TOTAL_BG = IndexedColors.LIGHT_YELLOW;
+    private static final IndexedColors COLOR_TITLE_BG = IndexedColors.DARK_RED;
+    private static final IndexedColors COLOR_TITLE_TEXT = IndexedColors.WHITE;
+
     private static final DateTimeFormatter DATE_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    private static final DateTimeFormatter DATE_DISPLAY_FORMAT =
+            DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
     private final SaleRepository saleRepository;
 
@@ -55,9 +67,9 @@ public class ReportExportService {
         LocalDate startDate = from == null ? LocalDate.now(SaleService.BUSINESS_ZONE) : from;
         LocalDate endDate = to == null ? startDate : to;
         if (startDate.equals(endDate)) {
-            return "ventas-del-dia-" + startDate + ".xlsx";
+            return "ventas-del-dia-" + DATE_DISPLAY_FORMAT.format(startDate) + ".xlsx";
         }
-        return "reporte-ventas-" + startDate + "_a_" + endDate + ".xlsx";
+        return "reporte-ventas-" + DATE_DISPLAY_FORMAT.format(startDate) + "_a_" + DATE_DISPLAY_FORMAT.format(endDate) + ".xlsx";
     }
 
     @Transactional(readOnly = true)
@@ -115,10 +127,10 @@ public class ReportExportService {
             writeSummarySheet(summarySheet, startDate, endDate, total, count, totalUnits,
                     paymentTotals, paymentCounts);
 
-            Sheet productsSheet = workbook.createSheet("Productos");
+            Sheet productsSheet = workbook.createSheet("Productos más vendidos");
             writeProductsSheet(productsSheet, products, totalUnits, total);
 
-            Sheet salesSheet = workbook.createSheet("Ventas");
+            Sheet salesSheet = workbook.createSheet("Detalle de ventas");
             writeSalesSheet(salesSheet, sales, total);
 
             workbook.write(output);
@@ -127,6 +139,8 @@ public class ReportExportService {
             throw new IllegalStateException("No se pudo generar el Excel del reporte", ex);
         }
     }
+
+    /* ========================= RESUMEN ========================= */
 
     private void writeSummarySheet(
             Sheet sheet,
@@ -138,124 +152,204 @@ public class ReportExportService {
             Map<PaymentMethod, BigDecimal> paymentTotals,
             Map<PaymentMethod, Long> paymentCounts
     ) {
-        CellStyle titleStyle = titleStyle(sheet.getWorkbook());
-        CellStyle headerStyle = headerStyle(sheet.getWorkbook());
-        CellStyle labelStyle = labelStyle(sheet.getWorkbook());
-        CellStyle boldStyle = boldLabelStyle(sheet.getWorkbook());
-        CellStyle moneyStyle = moneyStyle(sheet.getWorkbook());
+        Workbook wb = sheet.getWorkbook();
+        CellStyle titleStyle = titleStyle(wb);
+        CellStyle subtitleStyle = subtitleStyle(wb);
+        CellStyle headerStyle = headerStyle(wb);
+        CellStyle labelStyle = labelStyle(wb);
+        CellStyle moneyStyle = moneyStyle(wb);
+        CellStyle totalStyle = totalStyle(wb);
 
-        Row title = sheet.createRow(0);
-        setText(title, 0, "Reporte de ventas", titleStyle);
-        Row period = sheet.createRow(1);
+        // Título con fondo de marca
+        Row titleRow = sheet.createRow(0);
+        titleRow.setHeightInPoints(24);
+        Cell titleCell = titleRow.createCell(0);
+        titleCell.setCellValue("Reporte de ventas - Sushi Local");
+        titleCell.setCellStyle(titleStyle);
+        sheet.addMergedRegion(org.apache.poi.ss.util.CellRangeAddress.valueOf("A1:B1"));
+
+        // Subtítulo con período
+        Row periodRow = sheet.createRow(1);
+        periodRow.setHeightInPoints(18);
         String periodText = from.equals(to)
-                ? "Ventas del día: " + from
-                : "Período: " + from + " a " + to;
-        setText(period, 0, periodText, labelStyle);
+                ? "Ventas del día: " + DATE_DISPLAY_FORMAT.format(from)
+                : "Período: " + DATE_DISPLAY_FORMAT.format(from) + " a " + DATE_DISPLAY_FORMAT.format(to);
+        Cell periodCell = periodRow.createCell(0);
+        periodCell.setCellValue(periodText);
+        periodCell.setCellStyle(subtitleStyle);
+        sheet.addMergedRegion(org.apache.poi.ss.util.CellRangeAddress.valueOf("A2:B2"));
 
+        // Encabezado de tabla
         Row header = sheet.createRow(3);
+        header.setHeightInPoints(20);
         setText(header, 0, "Concepto", headerStyle);
         setText(header, 1, "Valor", headerStyle);
 
         int rowIndex = 4;
+
+        // Ventas completadas
         rowIndex = addSummaryRow(sheet, rowIndex, "Ventas completadas", String.valueOf(count), labelStyle, null);
 
+        // Medios de pago (cada uno con su total y cantidad)
         for (PaymentMethod method : PaymentMethod.values()) {
-            rowIndex = addSummaryRow(sheet, rowIndex, paymentLabel(method), null, labelStyle, moneyStyle);
-            sheet.getRow(rowIndex - 1).getCell(1)
-                    .setCellValue(paymentTotals.getOrDefault(method, BigDecimal.ZERO).doubleValue());
+            BigDecimal methodTotal = paymentTotals.getOrDefault(method, BigDecimal.ZERO);
+            Long methodCount = paymentCounts.getOrDefault(method, 0L);
+
+            rowIndex = addSummaryRow(sheet, rowIndex, paymentLabel(method) + " (total)",
+                    formatMoney(methodTotal), labelStyle, moneyStyle);
+
             rowIndex = addSummaryRow(sheet, rowIndex, paymentLabel(method) + " (cantidad de ventas)",
-                    String.valueOf(paymentCounts.getOrDefault(method, 0L)), labelStyle, null);
+                    String.valueOf(methodCount), labelStyle, null);
         }
 
         rowIndex = addSummaryRow(sheet, rowIndex, "Total de productos vendidos (unidades)",
                 String.valueOf(totalUnits), labelStyle, null);
-        rowIndex = addSummaryRow(sheet, rowIndex, "Suma total de las ventas", null, boldStyle, moneyStyle);
-        sheet.getRow(rowIndex - 1).getCell(1).setCellValue(total.doubleValue());
 
-        sheet.setColumnWidth(0, 42 * 256);
+        // Fila de total general destacada
+        Row totalRow = sheet.createRow(rowIndex);
+        totalRow.setHeightInPoints(20);
+        Cell totalLabel = totalRow.createCell(0);
+        totalLabel.setCellValue("Suma total de las ventas");
+        totalLabel.setCellStyle(totalStyle);
+        Cell totalValue = totalRow.createCell(1);
+        totalValue.setCellValue(formatMoney(total));
+        totalValue.setCellStyle(totalStyle);
+
+        sheet.setColumnWidth(0, 46 * 256);
         sheet.setColumnWidth(1, 22 * 256);
     }
 
+    /* ========================= PRODUCTOS ========================= */
+
     private void writeProductsSheet(Sheet sheet, List<ProductRow> products, long totalUnits, BigDecimal total) {
-        CellStyle headerStyle = headerStyle(sheet.getWorkbook());
-        CellStyle moneyStyle = moneyStyle(sheet.getWorkbook());
-        CellStyle boldStyle = boldLabelStyle(sheet.getWorkbook());
+        Workbook wb = sheet.getWorkbook();
+        CellStyle headerStyle = headerStyle(wb);
+        CellStyle moneyStyle = moneyStyle(wb);
+        CellStyle labelStyle = labelStyle(wb);
+        CellStyle totalStyle = totalStyle(wb);
+        CellStyle zebraStyle = zebraStyle(wb);
+        CellStyle zebraMoneyStyle = zebraMoneyStyle(wb);
 
         Row header = sheet.createRow(0);
+        header.setHeightInPoints(20);
         setText(header, 0, "Producto", headerStyle);
         setText(header, 1, "Cantidad", headerStyle);
         setText(header, 2, "Total", headerStyle);
 
         int rowIndex = 1;
-        for (ProductRow product : products) {
+        for (int i = 0; i < products.size(); i++) {
+            ProductRow product = products.get(i);
             Row row = sheet.createRow(rowIndex++);
-            setText(row, 0, product.name(), null);
-            setNumber(row, 1, product.quantity());
-            setMoney(row, 2, product.revenue(), moneyStyle);
+            boolean zebra = i % 2 == 1;
+            CellStyle nameStyle = zebra ? zebraStyle : labelStyle;
+            CellStyle qtyStyle = zebra ? zebraStyle : labelStyle;
+            CellStyle monStyle = zebra ? zebraMoneyStyle : moneyStyle;
+
+            setText(row, 0, product.name(), nameStyle);
+            setNumber(row, 1, product.quantity(), qtyStyle);
+            setMoney(row, 2, product.revenue(), monStyle);
         }
 
+        // Fila de total destacada
         Row footer = sheet.createRow(rowIndex);
-        setText(footer, 0, "TOTAL", boldStyle);
-        setNumber(footer, 1, totalUnits);
-        setMoney(footer, 2, total, moneyStyle);
+        footer.setHeightInPoints(20);
+        Cell totalLabel = footer.createCell(0);
+        totalLabel.setCellValue("TOTAL");
+        totalLabel.setCellStyle(totalStyle);
+        Cell totalQty = footer.createCell(1);
+        totalQty.setCellValue(totalUnits);
+        totalQty.setCellStyle(totalStyle);
+        Cell totalRev = footer.createCell(2);
+        totalRev.setCellValue(formatMoney(total));
+        totalRev.setCellStyle(totalStyle);
 
-        sheet.setColumnWidth(0, 48 * 256);
-        sheet.setColumnWidth(1, 16 * 256);
+        sheet.setColumnWidth(0, 52 * 256);
+        sheet.setColumnWidth(1, 14 * 256);
         sheet.setColumnWidth(2, 20 * 256);
+
+        // Congelar encabezado
+        sheet.createFreezePane(0, 1);
     }
 
+    /* ========================= DETALLE DE VENTAS ========================= */
+
     private void writeSalesSheet(Sheet sheet, List<Sale> sales, BigDecimal total) {
-        CellStyle headerStyle = headerStyle(sheet.getWorkbook());
-        CellStyle moneyStyle = moneyStyle(sheet.getWorkbook());
-        CellStyle boldStyle = boldLabelStyle(sheet.getWorkbook());
+        Workbook wb = sheet.getWorkbook();
+        CellStyle headerStyle = headerStyle(wb);
+        CellStyle labelStyle = labelStyle(wb);
+        CellStyle moneyStyle = moneyStyle(wb);
+        CellStyle totalStyle = totalStyle(wb);
+        CellStyle zebraStyle = zebraStyle(wb);
+        CellStyle zebraMoneyStyle = zebraMoneyStyle(wb);
+
+        String[] columns = {
+                "Número", "Fecha", "Hora", "Cajero", "Método de pago", "Total", "Estado", "Productos"
+        };
 
         Row header = sheet.createRow(0);
-        setText(header, 0, "Número", headerStyle);
-        setText(header, 1, "Fecha", headerStyle);
-        setText(header, 2, "Hora", headerStyle);
-        setText(header, 3, "Cajero", headerStyle);
-        setText(header, 4, "Método de pago", headerStyle);
-        setText(header, 5, "Total", headerStyle);
-        setText(header, 6, "Estado", headerStyle);
-        setText(header, 7, "Productos", headerStyle);
+        header.setHeightInPoints(22);
+        for (int i = 0; i < columns.length; i++) {
+            setText(header, i, columns[i], headerStyle);
+        }
 
         List<Sale> chronological = new ArrayList<>(sales);
         chronological.sort(Comparator.comparing(Sale::getCreatedAt));
+
         int rowIndex = 1;
-        for (Sale sale : chronological) {
+        for (int i = 0; i < chronological.size(); i++) {
+            Sale sale = chronological.get(i);
             LocalDateTime dateTime = LocalDateTime.ofInstant(sale.getCreatedAt(), SaleService.BUSINESS_ZONE);
             String productsText = sale.getItems().stream()
                     .map(item -> item.getQuantity() + " x " + item.getProductName())
                     .reduce((a, b) -> a + " | " + b)
                     .orElse("");
+
             Row row = sheet.createRow(rowIndex++);
-            setText(row, 0, sale.getNumber(), null);
-            setText(row, 1, dateTime.toLocalDate().toString(), null);
-            setText(row, 2, dateTime.format(DateTimeFormatter.ofPattern("HH:mm")), null);
-            setText(row, 3, sale.getCashier() != null ? sale.getCashier().getFullName() : "", null);
-            setText(row, 4, paymentLabel(sale.getPaymentMethod()), null);
-            setMoney(row, 5, sale.getTotal(), moneyStyle);
-            setText(row, 6, sale.getStatus() != null ? sale.getStatus().name() : "", null);
-            setText(row, 7, productsText, null);
+            boolean zebra = i % 2 == 1;
+            CellStyle baseStyle = zebra ? zebraStyle : labelStyle;
+            CellStyle moneyBaseStyle = zebra ? zebraMoneyStyle : moneyStyle;
+
+            setText(row, 0, sale.getNumber(), baseStyle);
+            setText(row, 1, DATE_DISPLAY_FORMAT.format(dateTime.toLocalDate()), baseStyle);
+            setText(row, 2, dateTime.format(DateTimeFormatter.ofPattern("HH:mm")), baseStyle);
+            setText(row, 3, sale.getCashier() != null ? sale.getCashier().getFullName() : "", baseStyle);
+            setText(row, 4, paymentLabel(sale.getPaymentMethod()), baseStyle);
+            setMoney(row, 5, sale.getTotal(), moneyBaseStyle);
+            setText(row, 6, sale.getStatus() != null ? saleStatusLabel(sale.getStatus()) : "", baseStyle);
+            // Los productos van con ajuste de texto para que entren dentro de la fila.
+            setText(row, 7, productsText, wrapStyle(wb));
+            row.setHeightInPoints(15 + (productsText.split("\\|").length - 1) * 12);
         }
 
+        // Fila de total destacada
         Row footer = sheet.createRow(rowIndex);
-        setText(footer, 0, "TOTAL", boldStyle);
-        setMoney(footer, 5, total, moneyStyle);
+        footer.setHeightInPoints(20);
+        Cell totalLabel = footer.createCell(0);
+        totalLabel.setCellValue("TOTAL");
+        totalLabel.setCellStyle(totalStyle);
+        Cell totalValue = footer.createCell(5);
+        totalValue.setCellValue(formatMoney(total));
+        totalValue.setCellStyle(totalStyle);
 
-        sheet.setColumnWidth(0, 16 * 256);
+        sheet.setColumnWidth(0, 14 * 256);
         sheet.setColumnWidth(1, 14 * 256);
-        sheet.setColumnWidth(2, 12 * 256);
-        sheet.setColumnWidth(3, 22 * 256);
-        sheet.setColumnWidth(4, 18 * 256);
-        sheet.setColumnWidth(5, 18 * 256);
-        sheet.setColumnWidth(6, 14 * 256);
+        sheet.setColumnWidth(2, 10 * 256);
+        sheet.setColumnWidth(3, 20 * 256);
+        sheet.setColumnWidth(4, 16 * 256);
+        sheet.setColumnWidth(5, 16 * 256);
+        sheet.setColumnWidth(6, 12 * 256);
         sheet.setColumnWidth(7, 60 * 256);
+
+        // Congelar encabezado
+        sheet.createFreezePane(0, 1);
     }
+
+    /* ========================= ESTILOS ========================= */
 
     private int addSummaryRow(Sheet sheet, int rowIndex, String label, String textValue,
                               CellStyle labelStyle, CellStyle valueStyle) {
         Row row = sheet.createRow(rowIndex);
+        row.setHeightInPoints(18);
         setText(row, 0, label, labelStyle);
         Cell value = row.createCell(1);
         value.setCellStyle(valueStyle);
@@ -273,23 +367,58 @@ public class ReportExportService {
         }
     }
 
-    private void setNumber(Row row, int column, long value) {
+    private void setNumber(Row row, int column, long value, CellStyle style) {
         Cell cell = row.createCell(column);
         cell.setCellValue(value);
+        if (style != null) {
+            cell.setCellStyle(style);
+        }
     }
 
     private void setMoney(Row row, int column, BigDecimal value, CellStyle style) {
         Cell cell = row.createCell(column);
-        cell.setCellValue(value.doubleValue());
-        cell.setCellStyle(style);
+        if (value != null) {
+            cell.setCellValue(formatMoney(value));
+        } else {
+            cell.setCellValue("$0");
+        }
+        if (style != null) {
+            cell.setCellStyle(style);
+        }
+    }
+
+    /**
+     * Formatea un monto en estilo chileno: $32.780 (punto como separador de miles, sin decimales).
+     */
+    private String formatMoney(BigDecimal value) {
+        if (value == null) {
+            return "$0";
+        }
+        return "$" + String.format("%,d", value.longValue()).replace(",", ".");
     }
 
     private CellStyle titleStyle(Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
         Font font = workbook.createFont();
         font.setBold(true);
-        font.setFontHeightInPoints((short) 16);
+        font.setFontHeightInPoints((short) 18);
+        font.setColor(COLOR_TITLE_TEXT.getIndex());
         style.setFont(font);
+        style.setFillForegroundColor(COLOR_TITLE_BG.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
+    }
+
+    private CellStyle subtitleStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setFontHeightInPoints((short) 12);
+        font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
         return style;
     }
 
@@ -297,10 +426,9 @@ public class ReportExportService {
         CellStyle style = workbook.createCellStyle();
         Font font = workbook.createFont();
         font.setBold(true);
-        font.setColor(org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex());
+        font.setColor(IndexedColors.WHITE.getIndex());
         style.setFont(font);
-        style.setFillForegroundColor(
-                org.apache.poi.ss.usermodel.IndexedColors.GREY_50_PERCENT.getIndex());
+        style.setFillForegroundColor(COLOR_PRIMARY.getIndex());
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         style.setAlignment(HorizontalAlignment.CENTER);
         style.setVerticalAlignment(VerticalAlignment.CENTER);
@@ -317,6 +445,28 @@ public class ReportExportService {
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
+    }
+
+    private CellStyle zebraStyle(Workbook workbook) {
+        CellStyle style = labelStyle(workbook);
+        style.setFillForegroundColor(COLOR_ZEBRA.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return style;
+    }
+
+    private CellStyle zebraMoneyStyle(Workbook workbook) {
+        CellStyle style = moneyStyle(workbook);
+        style.setFillForegroundColor(COLOR_ZEBRA.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return style;
+    }
+
+    private CellStyle wrapStyle(Workbook workbook) {
+        CellStyle style = labelStyle(workbook);
+        style.setWrapText(true);
+        style.setVerticalAlignment(VerticalAlignment.TOP);
         return style;
     }
 
@@ -335,6 +485,25 @@ public class ReportExportService {
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.RIGHT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
+    }
+
+    private CellStyle totalStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setColor(IndexedColors.BLACK.getIndex()); // letra negra sobre fondo claro para buen contraste
+        style.setFont(font);
+        style.setFillForegroundColor(COLOR_TOTAL_BG.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setBorderTop(BorderStyle.MEDIUM);
+        style.setBorderBottom(BorderStyle.MEDIUM);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.RIGHT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
         return style;
     }
 
@@ -347,6 +516,13 @@ public class ReportExportService {
             case DEBIT -> "Débito";
             case CREDIT -> "Crédito";
             case TRANSFER -> "Transferencia";
+        };
+    }
+
+    private String saleStatusLabel(cl.ipfsoftware.backend.domain.SaleStatus status) {
+        return switch (status) {
+            case COMPLETED -> "Completado";
+            case VOIDED -> "Anulado";
         };
     }
 
