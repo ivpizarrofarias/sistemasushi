@@ -308,6 +308,20 @@ productos de ejemplo.
 | `docker compose logs -f app` | Logs de la aplicación. |
 | `docker compose down` | Detiene el contenedor. |
 | `docker compose up -d --build` | Reconstruye y reinicia tras cambiar el código. |
+| `./deploy.sh` | Actualiza con `git pull`, reconstruye y verifica la app. |
+
+### 9.4 Actualizar el despliegue
+
+Desde el servidor, para bajar los últimos cambios y redesplegar:
+
+```bash
+cd ~/sistemasushi
+./deploy.sh
+```
+
+El script hace `git pull --ff-only`, reconstruye la imagen, reinicia el
+contenedor y verifica que la aplicación responda. Si solo quieres reconstruir
+sin tocar Git, usa `./deploy.sh --no-pull`.
 
 > La base de datos está en el servidor (`<IP_DEL_SERVIDOR>`), no en un contenedor.
 > Para administrarla usa el `psql` del servidor o un cliente externo.
