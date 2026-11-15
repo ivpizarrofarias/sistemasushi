@@ -11,6 +11,10 @@ Cada cobro genera una **boleta en PDF**.
 > Carpeta del proyecto: `sistemasushi/` (el backend interno se llama `backend/`).
 > La conexión a PostgreSQL se configura con variables de entorno (ver sección 5.1).
 
+> 📄 **Requerimientos del sistema:** revisa [`REQUERIMIENTOS.md`](REQUERIMIENTOS.md)
+> para conocer en detalle qué hace el sistema, sus reglas de negocio, roles,
+> permisos y limitaciones.
+
 ---
 
 ## 1. ¿Qué es el sistema?
