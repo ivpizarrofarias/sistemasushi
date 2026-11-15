@@ -28,13 +28,16 @@ La descripción general del proyecto está en [`../README.md`](../README.md).
 
 `src/main/resources/application.properties`:
 
+> Las credenciales de PostgreSQL no se versionan: define `DB_URL`,
+> `DB_USER` y `DB_PASSWORD` en el entorno (o en un `.env` para Docker Compose).
+
 | Propiedad | Valor / variable |
 |---|---|
 | `server.port` | `8080` (`SERVER_PORT`) |
 | Sesión | `8h`, `SameSite=Lax`, `HttpOnly`, `JSESSIONID` |
-| `spring.datasource.url` | `jdbc:postgresql://<host>:<puerto>/<nombre_de_la_base>` (`DB_URL`) |
+| `spring.datasource.url` | `${DB_URL}` (obligatoria) |
 | `spring.datasource.username` | `${DB_USER}` (obligatoria) |
-| `spring.datasource.password` | `<DB_PASSWORD>` (`DB_PASSWORD`) |
+| `spring.datasource.password` | `${DB_PASSWORD}` (obligatoria) |
 | `spring.jpa.hibernate.ddl-auto` | `update` (`JPA_DDL_AUTO`) |
 | Zona horaria | `America/Santiago` (JPA + Jackson) |
 | `app.cors.allowed-origins` | `http://localhost:5173,http://127.0.0.1:5173` (`CORS_ORIGINS`) |
@@ -46,12 +49,10 @@ Los errores devuelven `{"message": "...", "details": [...]}`.
 
 ### Datos iniciales (`DataSeeder`)
 
-Si la tabla `app_users` está vacía crea:
-
-| Usuario | Contraseña | Rol |
-|---|---|---|
-| `admin` | `<ADMIN_PASSWORD>` | `ADMIN` |
-| `cajero` | `<CASHIER_PASSWORD>` | `CASHIER` |
+Si la tabla `app_users` está vacía, crea las cuentas definidas en las
+variables de entorno `SEED_ADMIN_USERNAME` y `SEED_ADMIN_PASSWORD`
+(opcionalmente `SEED_CASHIER_USERNAME` y `SEED_CASHIER_PASSWORD`). No hay
+credenciales por defecto en el código.
 
 Y si no hay productos, crea 4 categorías (**Rolls**, **Combos**, **Bebidas**,
 **Postres**) y 9 productos de ejemplo (rolls, combos, bebidas y postres).

@@ -9,7 +9,7 @@ usuarios, y consultar reportes de venta del día con exportación a Excel.
 Cada cobro genera una **boleta en PDF**.
 
 > Carpeta del proyecto: `sistemasushi/` (el backend interno se llama `backend/`).
-> La conexión a PostgreSQL se configura con variables de entorno.
+> La conexión a PostgreSQL se configura con variables de entorno (ver sección 5.1).
 
 ---
 
@@ -21,7 +21,7 @@ Es una aplicación web de dos partes:
 |---|---|
 | **Frontend** (`frontend/`) | Interfaz del cajero/administrador: Venta, Caja, Productos, Reportes y Usuarios. Se sirve en `http://localhost:5173` (Vite) y se comunica con el backend vía proxy `/api`. |
 | **Backend** (`backend/`) | API REST en `http://localhost:8080` (`/api/...`) con autenticación por sesión (cookie `JSESSIONID`), control de acceso por roles, reglas de negocio y generación del Excel. |
-| **Base de datos** | PostgreSQL local, base configurable. Hibernate crea/actualiza el esquema automáticamente (`ddl-auto=update`). |
+| **Base de datos** | PostgreSQL (base y credenciales configurables por variables de entorno). Hibernate crea/actualiza el esquema automáticamente (`ddl-auto=update`). |
 
 ### Flujo de uso (resumen)
 
@@ -91,7 +91,7 @@ Es una aplicación web de dos partes:
 | **Spring Framework** | 7.0.10 (incluido por Boot 4) |
 | **Spring Web MVC** | `spring-boot-starter-webmvc` (Tomcat 11 embebido) |
 | **Spring Data JPA + Hibernate** | ORM 7.4.13, `spring-boot-starter-data-jpa` |
-| **PostgreSQL** | Driver JDBC 42.7.14, base configurable |
+| **PostgreSQL** | Driver JDBC 42.7.14 |
 | **Spring Security** | Sesión por cookie `JSESSIONID`, BCrypt, CORS, roles `ADMIN`/`CASHIER` |
 | **Bean Validation** | `spring-boot-starter-validation` (Hibernate Validator) |
 | **Apache POI** | **5.3.0** (`poi-ooxml`) → generación del Excel `.xlsx` |
@@ -118,14 +118,14 @@ Más detalle en [`backend/README.md`](./backend/README.md).
 | **CSS** | CSS propio en `src/styles.css` (sin framework de UI) |
 
 ### Base de datos
-- **PostgreSQL** local (`localhost:5432`), base configurable,
-  usuario configurable. Tablas creadas por Hibernate:
+- **PostgreSQL** (conexión configurable mediante `DB_URL`, `DB_USER` y
+  `DB_PASSWORD`). Tablas creadas por Hibernate:
   `app_users`, `categories`, `products`, `sales`, `sale_items`,
   `cash_sessions`, `stock_movements`.
 
 ### Herramientas de desarrollo
 - **IntelliJ IDEA 2026.1.3** con JDK **17** registrado como `"17"`.
-- **Git** (sin inicializar aún: falta `git init` y commits).
+- **Git** + GitHub (repositorio remoto).
 - **Node.js + npm** para el frontend (`npm install`, `npm run dev`, `npm run build`).
 
 ---
@@ -133,29 +133,38 @@ Más detalle en [`backend/README.md`](./backend/README.md).
 ## 4. Requisitos
 
 - JDK **17** (la clase se compila con `release 17`).
-- **PostgreSQL** en `localhost:5432` con la base configurable creada (ver abajo).
+- **PostgreSQL** con una base de datos creada y sus credenciales de acceso (ver abajo).
 - **Node.js** (LTS) y **npm**.
 
 ---
 
 ## 5. Instalación y ejecución
 
-### 5.1 Crear la base de datos
+### 5.1 Configurar la base de datos
+
+Crea una base de datos PostgreSQL (con el nombre que elijas) y define la
+conexión mediante variables de entorno. **No hay credenciales en el
+repositorio.**
 
 ```sql
 CREATE DATABASE <nombre_de_la_base>
 WITH ENCODING 'UTF8' TEMPLATE template0;
 ```
 
-Las credenciales por defecto están en
-`backend/src/main/resources/application.properties` y se pueden sobreescribir
-con variables de entorno: `DB_URL`, `DB_USER`, `DB_PASSWORD`.
+```bash
+export DB_URL='jdbc:postgresql://localhost:5432/<nombre_de_la_base>'
+export DB_USER='<usuario>'
+export DB_PASSWORD='<contraseña>'
+```
 
-| Propiedad | Valor por defecto |
+Para Docker Compose puedes crear un archivo `.env` en la raíz del proyecto
+(no se versiona; usa `.env.example` como plantilla).
+
+| Variable | Descripción |
 |---|---|
-| `spring.datasource.url` | `jdbc:postgresql://<host>:<puerto>/<nombre_de_la_base>` |
-| `spring.datasource.username` | `${DB_USER}` (obligatoria) |
-| `spring.datasource.password` | `<DB_PASSWORD>` |
+| `DB_URL` | URL JDBC completa de PostgreSQL. |
+| `DB_USER` | Usuario de la base de datos. |
+| `DB_PASSWORD` | Contraseña de la base de datos. |
 
 ### 5.2 Backend
 
@@ -183,10 +192,17 @@ cmd /c "npm run preview"    # sirve el build de producción
 
 ### 5.4 Usuarios iniciales (se crean en el primer arranque)
 
-| Usuario | Contraseña | Rol |
-|---|---|---|
-| `admin` | `<ADMIN_PASSWORD>` | Administrador |
-| `cajero` | `<CASHIER_PASSWORD>` | Cajero |
+Si la tabla de usuarios está vacía, `DataSeeder` crea las cuentas iniciales
+usando las variables de entorno `SEED_ADMIN_USERNAME`, `SEED_ADMIN_PASSWORD`,
+`SEED_CASHIER_USERNAME` y `SEED_CASHIER_PASSWORD` (las dos últimas son
+opcionales). No hay usuarios ni contraseñas por defecto en el código.
+
+```bash
+export SEED_ADMIN_USERNAME='admin'
+export SEED_ADMIN_PASSWORD='<contraseña-segura>'
+export SEED_CASHIER_USERNAME='cajero'
+export SEED_CASHIER_PASSWORD='<contraseña-segura>'
+```
 
 El login **no distingue mayúsculas** (`Admin` entra como `admin`).
 **Cambia estas contraseñas** desde **Usuarios** antes de usar el sistema en el local.
@@ -196,7 +212,7 @@ El login **no distingue mayúsculas** (`Admin` entra como `admin`).
 ## 6. Capturas del sistema funcionando
 
 Capturas reales tomadas en local (`frontend` 5173 → `backend` 8080 → PostgreSQL),
-con sesión **admin** iniciada. Fecha de operación: **2026-11-09**.
+con una sesión de administrador iniciada. Fecha de operación: **2026-11-09**.
 
 ### 6.1 Inicio de sesión
 
@@ -279,9 +295,9 @@ El proyecto incluye `Dockerfile` y `docker-compose.yml` para desplegar en un
 servidor con un solo contenedor: la aplicación (Spring Boot sirviendo también
 el frontend compilado). Acceso por `http://<ip-del-servidor>:8000`.
 
-La aplicación usa por defecto la base de datos del servidor
-(`<IP_DEL_SERVIDOR>:5432`, base configurable). Si quieres usar otra, define
-`DB_URL`, `DB_USER` y `DB_PASSWORD` en un archivo `.env` (ver `.env.example`).
+La conexión a PostgreSQL se define con `DB_URL`, `DB_USER` y `DB_PASSWORD`
+en un archivo `.env` en la raíz del proyecto (ver `.env.example`). Ese archivo
+no se versiona.
 
 ### 9.1 Requisitos en el servidor
 
@@ -292,12 +308,13 @@ La aplicación usa por defecto la base de datos del servidor
 ```bash
 git clone <url-del-repositorio>
 cd sistemasushi
+cp .env.example .env   # completa DB_URL, DB_USER y DB_PASSWORD
 docker compose up -d --build
 docker compose logs -f app
 ```
 
 La primera vez Hibernate crea el esquema (`ddl-auto=update`) y el `DataSeeder`
-crea los usuarios iniciales (`admin`/`<ADMIN_PASSWORD>`, `cajero`/`<CASHIER_PASSWORD>`) y los
+crea los usuarios iniciales definidos en las variables `SEED_*` y los
 productos de ejemplo.
 
 ### 9.3 Comandos útiles
@@ -323,7 +340,7 @@ El script hace `git pull --ff-only`, reconstruye la imagen, reinicia el
 contenedor y verifica que la aplicación responda. Si solo quieres reconstruir
 sin tocar Git, usa `./deploy.sh --no-pull`.
 
-> La base de datos está en el servidor (`<IP_DEL_SERVIDOR>`), no en un contenedor.
-> Para administrarla usa el `psql` del servidor o un cliente externo.
+> La base de datos PostgreSQL es externa al contenedor de la aplicación.
+> Para administrarla usa `psql` o un cliente externo.
 
 > Cambia las contraseñas iniciales desde **Usuarios** antes de operar.

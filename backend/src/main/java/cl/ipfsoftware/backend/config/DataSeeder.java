@@ -7,6 +7,9 @@ import cl.ipfsoftware.backend.domain.User;
 import cl.ipfsoftware.backend.repository.CategoryRepository;
 import cl.ipfsoftware.backend.repository.ProductRepository;
 import cl.ipfsoftware.backend.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,30 +22,29 @@ import java.util.Map;
 @Configuration
 public class DataSeeder {
 
+    private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
+
     @Bean
     public CommandLineRunner seedData(
             UserRepository userRepository,
             CategoryRepository categoryRepository,
             ProductRepository productRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            @Value("${SEED_ADMIN_USERNAME:}") String adminUsername,
+            @Value("${SEED_ADMIN_PASSWORD:}") String adminPassword,
+            @Value("${SEED_CASHIER_USERNAME:}") String cashierUsername,
+            @Value("${SEED_CASHIER_PASSWORD:}") String cashierPassword
     ) {
         return args -> {
             if (userRepository.count() == 0) {
-                // CUENTAS POR DEFECTO: estas credenciales solo sirven para el primer arranque.
-                // En producción deben cambiarse inmediatamente tras el primer inicio de sesión.
-                User admin = new User();
-                admin.setUsername("admin");
-                admin.setPassword(passwordEncoder.encode("<ADMIN_PASSWORD>"));
-                admin.setFullName("Administrador");
-                admin.setRole(Role.ADMIN);
-                userRepository.save(admin);
-
-                User cashier = new User();
-                cashier.setUsername("cajero");
-                cashier.setPassword(passwordEncoder.encode("<CASHIER_PASSWORD>"));
-                cashier.setFullName("Cajero");
-                cashier.setRole(Role.CASHIER);
-                userRepository.save(cashier);
+                // Las cuentas iniciales se definen por variables de entorno y nunca
+                // se versionan en el repositorio.
+                seedUser(userRepository, passwordEncoder, adminUsername, adminPassword, "Administrador", Role.ADMIN);
+                seedUser(userRepository, passwordEncoder, cashierUsername, cashierPassword, "Cajero", Role.CASHIER);
+                if (userRepository.count() == 0) {
+                    log.warn("No se crearon usuarios iniciales: define SEED_ADMIN_USERNAME y "
+                            + "SEED_ADMIN_PASSWORD (y opcionalmente SEED_CASHIER_*) en el entorno.");
+                }
             }
 
             Map<String, Category> categories = new LinkedHashMap<>();
@@ -63,6 +65,25 @@ public class DataSeeder {
                 createProduct(productRepository, "Cheesecake", "Porción de cheesecake", 3500, 10, 3, categories.get("Postres"));
             }
         };
+    }
+
+    private void seedUser(
+            UserRepository repository,
+            PasswordEncoder passwordEncoder,
+            String username,
+            String password,
+            String fullName,
+            Role role
+    ) {
+        if (username == null || username.isBlank() || password == null || password.isBlank()) {
+            return;
+        }
+        User user = new User();
+        user.setUsername(username.trim());
+        user.setPassword(passwordEncoder.encode(password));
+        user.setFullName(fullName);
+        user.setRole(role);
+        repository.save(user);
     }
 
     private Category findOrCreateCategory(CategoryRepository repository, String name, String color) {

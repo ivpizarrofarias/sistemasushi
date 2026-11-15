@@ -70,10 +70,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="login-hint">
-          <strong>Acceso de prueba</strong>
-          <span>admin / <ADMIN_PASSWORD> · cajero / <CASHIER_PASSWORD></span>
-        </div>
       </div>
     </div>
   )
